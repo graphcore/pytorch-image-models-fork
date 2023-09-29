@@ -30,6 +30,14 @@ from timm import list_models, create_model, set_scriptable, get_pretrained_cfg_v
 from timm.layers import Format, get_spatial_dim, get_channel_dim
 from timm.models import get_notrace_modules, get_notrace_functions
 
+import importlib
+import os
+
+torch_backend = os.environ.get('TORCH_BACKEND')
+if torch_backend is not None:
+    importlib.import_module(torch_backend)
+torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
+
 if hasattr(torch._C, '_jit_set_profiling_executor'):
     # legacy executor is too slow to compile large models for unit tests
     # no need for the fusion performance here
@@ -57,6 +65,28 @@ if 'GITHUB_ACTIONS' in os.environ:
 else:
     EXCLUDE_FILTERS = ['*enormous*']
     NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*']
+
+if torch_device == 'ipu':
+    FILTER = [
+        'beit_base_patch16_224', 'beitv2_base_patch16_224', 'botnet26t_256', 'caformer_b36', 'cait_m36_384',
+        'coat_lite_medium', 'coatnet_0_224', 'convformer_b36', 'convit_base', 'convmixer_768_32', 'convnext_atto',
+        'convnextv2_atto', 'crossvit_9_240', 'cspresnet50', 'darknet17', 'davit_base', 'deit3_base_patch16_224',
+        'densenet121', 'ecaresnet26t', 'ecaresnext26t_32x4d', 'edgenext_base', 'efficientformer_l1',
+        'efficientformerv2_l', 'efficientnet_b0', 'efficientnetv2_l', 'efficientvit_b0', 'fastvit_ma36', 'fbnetc_100',
+        'fbnetv3_b', 'flexivit_base', 'focalnet_base_lrf', 'gcresnet33ts', 'gcresnext26ts', 'gcvit_base',
+        'gernet_l', 'ghostnet_050', 'ghostnetv2_100', 'gmixer_12_224', 'gmlp_b16_224', 'halo2botnet50ts_256',
+        'halonet26t', 'hardcorenas_a', 'hrnet_w18', 'inception_next_base', 'lambda_resnet26rpt_256', 'lcnet_035',
+        'legacy_senet154', 'levit_128', 'maxvit_base_tf_224', 'maxxvit_rmlp_nano_rw_256', 'maxxvitv2_nano_rw_256',
+        'mixer_b16_224', 'mixnet_l', 'mnasnet_050', 'mobilenetv2_035', 'mobileone_s0', 'mobilevit_s', 'mobilevitv2_050',
+        'mvitv2_base', 'nest_base', 'nfnet_f0', 'poolformer_m36', 'poolformerv2_m36', 'regnetv_040', 'regnetx_002',
+        'regnety_002', 'regnetz_005', 'repghostnet_050', 'repvgg_a0', 'repvit_m1', 'resmlp_12_224', 'resnest14d',
+        'resnet10t', 'resnetaa34d', 'resnetblur18', 'resnetrs50', 'resnetv2_50', 'resnext26ts', 'rexnet_100',
+        'rexnetr_100', 'samvit_base_patch16', 'selecsls42', 'semnasnet_050', 'sequencer2d_l', 'seresnet18',
+        'seresnext26d_32x4d', 'seresnextaa101d_32x8d', 'skresnet18', 'swin_base_patch4_window7_224',
+        'swinv2_base_window8_256', 'tiny_vit_5m_224', 'tinynet_a', 'tresnet_l', 'twins_pcpvt_base', 'visformer_small',
+        'volo_d1_224', 'vovnet39a', 'wide_resnet50_2', 'xception41', 'xcit_large_24_p16_224']
+else:
+    FILTERS = ''
 
 EXCLUDE_JIT_FILTERS = []
 
@@ -101,7 +131,7 @@ def _get_input_size(model=None, model_name='', target=None):
 
 @pytest.mark.base
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(filter=FILTER, exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -112,6 +142,10 @@ def test_model_forward(model_name, batch_size):
     if max(input_size) > MAX_FWD_SIZE:
         pytest.skip("Fixed input size model > limit.")
     inputs = torch.randn((batch_size, *input_size))
+
+    inputs = inputs.to(torch_device)
+    model.to(torch_device)
+
     outputs = model(inputs)
 
     assert outputs.shape[0] == batch_size
@@ -120,7 +154,7 @@ def test_model_forward(model_name, batch_size):
 
 @pytest.mark.base
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
+@pytest.mark.parametrize('model_name', list_models(filter=FILTER, exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [2])
 def test_model_backward(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -133,6 +167,10 @@ def test_model_backward(model_name, batch_size):
     model.train()
 
     inputs = torch.randn((batch_size, *input_size))
+
+    inputs = inputs.to(torch_device)
+    model.to(torch_device)
+
     outputs = model(inputs)
     if isinstance(outputs, tuple):
         outputs = torch.cat(outputs)
