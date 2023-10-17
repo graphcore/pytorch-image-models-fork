@@ -37,6 +37,7 @@ torch_backend = os.environ.get('TORCH_BACKEND')
 if torch_backend is not None:
     importlib.import_module(torch_backend)
 torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
+timeout = os.environ.get('TIMEOUT', 120)
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):
     # legacy executor is too slow to compile large models for unit tests
@@ -130,7 +131,7 @@ def _get_input_size(model=None, model_name='', target=None):
 
 
 @pytest.mark.base
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(timeout)
 @pytest.mark.parametrize('model_name', list_models(filter=FILTER, exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward(model_name, batch_size):
@@ -153,7 +154,7 @@ def test_model_forward(model_name, batch_size):
 
 
 @pytest.mark.base
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(timeout)
 @pytest.mark.parametrize('model_name', list_models(filter=FILTER, exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [2])
 def test_model_backward(model_name, batch_size):
